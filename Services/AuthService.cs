@@ -43,6 +43,7 @@ namespace Bank_Slip_Scanner_App.Services
                 if (!user.Actif)
                     return Fail("Account disabled.Contact administrator.");
                 // compte verrouillé?
+
                 if (user.CompteVerrouille)
                     return Fail("Account locked after 5 attemps. Contact administrator.");
                 // verifier mot de passe (BCrypt)

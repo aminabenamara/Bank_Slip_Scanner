@@ -21,7 +21,7 @@ namespace Bank_Slip_Scanner_App.Data
                 entity.HasIndex(u => u.Email).IsUnique();
                 entity.Property(u => u.Actif).HasDefaultValue(true);
                 entity.Property(u => u.CompteVerrouille).HasDefaultValue(false);
-                entity.Property(u => u.TentativesConnexionEchouees).HasDefaultValue(0);
+                entity.Property(u => u.TentativesConnexion).HasDefaultValue(0);
                 entity.Property(u => u.DateCreation).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             });

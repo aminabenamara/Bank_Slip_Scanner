@@ -78,7 +78,7 @@ namespace Bank_Slip_Scanner_App.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erreur register");
-                return StatusCode(500, new { success = false, message = "erreur inetrne serveur." });
+                return StatusCode(500, new { success = false, message = ex.Message, detail = ex.InnerException?.Message });
             }
         }
     }
