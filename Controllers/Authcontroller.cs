@@ -33,10 +33,14 @@ namespace Bank_Slip_Scanner_App.Controllers
                 var ua = HttpContext.Request.Headers["User-agent"].ToString();
 
                 var result = await _auth.LoginAsync(req.Email, req.Password, req.KeepSignedIn, ip, ua);
-                if (result.Success)
-                    return Ok(result);
-                else
-                    Unauthorized(result);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            else
+            {
+                return Unauthorized(result);
+            }
             }
             [HttpPost("logout")]
             [Authorize]

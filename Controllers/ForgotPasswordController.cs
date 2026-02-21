@@ -10,14 +10,14 @@ namespace Bank_Slip_Scanner_App.Controllers
     [Route("api/auth")]
     public class ForgotPasswordController : ControllerBase
     {
-        private readonly ApplicationDbContext context;
-        private readonly ILogger<ForgotPasswordController> logger;
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<ForgotPasswordController> _logger;
         
 
         public ForgotPasswordController(ApplicationDbContext context, ILogger<ForgotPasswordController> logger)
         {
-            this.context = context;
-            this.logger = logger;
+            _context = context;
+            _logger = logger;
         }
 
        
@@ -38,8 +38,8 @@ namespace Bank_Slip_Scanner_App.Controllers
                 // sécurite : si l'utilisateur n'existe pas , on fait semblant que ca a marche 
                 if (user == null)
                 {
-                   _logger.LogWarring("email introvable : {Email}", email);
-                    return Ok(new { success = true, message = "si cet email existe, un lien a été envoyé." });
+                    _logger.LogWarning("email introvable : {Email}", email);
+                    return Ok(new { success = true, message = "si cet email existe, un lien a été envoyé." }); }
                     // générer le token
                     var token = GenerateResertToken();
                     // mettre à jour l'utilisateur 
@@ -50,16 +50,16 @@ namespace Bank_Slip_Scanner_App.Controllers
                     await _context.SaveChangesAsync();
                     // on crée le lien 
                     var lienReset = $"http://localhost:4200/reset-password?token={token}";
-                    Logger.LogWarning("[simulation email] clique ici pour reset : {lien}", lienReset);
+                    _logger.LogWarning("[simulation email] clique ici pour reset : {lien}", lienReset);
                     return Ok(new
                     {
                         success = true,
                         message = "un lien de réinitialisation a été envoyé à votre email"
                     });
 
-                }
+                
             } catch (Exception ex) {
-                this._logger.LogError(ex, "Erreur serveur");
+                _logger.LogError(ex, "Erreur serveur");
                 return StatusCode(500, new { success = false, message = "erreur interne." });
             }
 
@@ -69,11 +69,11 @@ namespace Bank_Slip_Scanner_App.Controllers
             var randomBytes = new byte[64];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomBytes);
-            return Convert.ToBase64String(randomBytes);
+            return Convert.ToBase64String(randomBytes)
                 .Replace("+", "")
                 .Replace("/", "")
                 .Replace("=", "")
-                .Substring(0, 64)
+                .Substring(0, 64);
 
 
         }

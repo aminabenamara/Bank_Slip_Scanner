@@ -6,52 +6,53 @@ using Bank_Slip_Scanner_App.Data;
 using Bank_Slip_Scanner_App.Services;
 using static Bank_Slip_Scanner_App.Services.IJwtTokenService;
 
-public partial class Program
-{
-    private static void Main(string[] args)
-    {
-        var builder = WebApplication.CreateBuilder(args);
+
+
+var builder = WebApplication.CreateBuilder(args);
         // base de données sql
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseMySql(
+            options.UseSqlServer(
 
-                    (Microsoft.EntityFrameworkCore.ServerVersion)builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                       options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
+                    builder.Configuration.GetConnectionString("DefaultConnection"))
 
-              ));
+              );
         // services 
         builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
         //JWT Authentification
-        var jwt = builder.Configuration.GetSection("JwtSettings");
+        var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+        var secretKey = jwtSettings["SecretKey"];
+
         builder.Services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(Opt =>
+            .AddJwtBearer(Options =>
             {
-                Opt.TokenValidationParameters = new TokenValidationParameters
+                Options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwt["Issuer"],
-                    ValidAudience = jwt["Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["SecretKey"]!)),
+                    ValidIssuer = jwtSettings["Issuer"],
+                    ValidAudience = jwtSettings["Audience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!)),
                     ClockSkew = TimeSpan.Zero
                 };
             });
-        builder.Services.AddAuthentication();
+        builder.Services.AddAuthorization();
         // CORS -> Angular sur localhost:4200
-        builder.Services.AddCors(opt =>
-         opt.AddPolicy("AllowAngular", p =>
-          p.WithOrigins("http://localhost:4200")
+        builder.Services.AddCors(options =>
+         options.AddPolicy("AllowAngular", policy =>
+          policy.WithOrigins("http://localhost:4200")
           .AllowAnyMethod()
           .AllowAnyHeader()));
         // controlles + swagger
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+
+        
 
         // build
         var app = builder.Build();
@@ -66,5 +67,4 @@ public partial class Program
         app.MapControllers();
 
         app.Run();
-    }
-}
+   
