@@ -6,8 +6,8 @@
             public string Email { get; set; }
             public string Password { get; set; }
             public bool KeepSignedIn { get; set; }
-
-        }
+        public bool Success { get; internal set; }
+    }
         public class LoginResponse
         {
             public bool Success { get; set; }

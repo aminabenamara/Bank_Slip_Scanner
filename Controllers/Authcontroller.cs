@@ -1,36 +1,34 @@
-﻿using Bank_Slip_Scanner_App.Models.DTOs;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using System.Linq;
+using Bank_Slip_Scanner_App.Models.DTOs;
 using Bank_Slip_Scanner_App.Services;
 
 
 namespace Bank_Slip_Scanner_App.Controllers
 {
-    public class AuthController
-    {
+   
+    
         [ApiController]
         [Route("api/[controller]")]
-        public class IAuthcontroller : ControllerBase
+        public class Authcontroller : ControllerBase
         {
             private readonly IAuthService auth;
-            private object _auth;
-            private IEnumerable<string> roles;
-            private object nomComplet;
+        private IAuthService _auth;
 
-            public IAuthcontroller(IAuthService auth)
+        public Authcontroller(IAuthService auth)
             {
-                _auth = auth;
+            _auth = auth;
             }
 
             [HttpPost("login")]
             [AllowAnonymous]
             public async Task<IActionResult> Login([FromBody] LoginRequest req)
             {
-                if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
-                    return BadRequest(new { sucess = false, message = "Email and password required" });
+            if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
+            {
+                return BadRequest(new { sucess = false, message = "Email and password required" });
+            }
                 var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 var ua = HttpContext.Request.Headers["User-agent"].ToString();
 
@@ -39,7 +37,7 @@ namespace Bank_Slip_Scanner_App.Controllers
                     return Ok(result);
                 else
                     Unauthorized(result);
-            } 
+            }
             [HttpPost("logout")]
             [Authorize]
             public async Task<IActionResult> Logout()
@@ -59,16 +57,30 @@ namespace Bank_Slip_Scanner_App.Controllers
             });
             [HttpPost("change-password")]
             [Authorize]
-            public async Task<IActionResult> ChangePassword([FromBody] changePasswordRequest req)
+            public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
             {
                 var idUsers = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
                 var success = await _auth.ChangePasswordAsync(idUsers, req.OldPassword, req.NewPassword);
-                return success
-                    ? Ok(new { success = true, message = "password change"
-                    })
-                    : BadRequest(new { success = false, message = "worng old password"
-                    });
+
+                if (success)
+                    return Ok(new { success = true, message = "password change" });
+                else
+                    return BadRequest(new { success = false, message = "worng old password" });
             }
         }
-    }
+
+    internal class _auth
+    {
+        internal static async Task<bool> ChangePasswordAsync(int idUsers, string oldPassword, string newPassword)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal static async Task LoginAsync(string email, string password, bool keepSignedIn, string ip, string ua)
+        {
+            throw new NotImplementedException();
+        }
+
+       
+}
 }

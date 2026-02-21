@@ -11,7 +11,7 @@ namespace Bank_Slip_Scanner_App.Services
         Task<LoginRequest> LoginAsync(string email, string password, bool keepSignedIn, string ip, string ua);
         Task<bool> LoginAsync(int idUsers);
         Task<bool> ChangePasswordAsync(int idUsers, string oldPwd, string newPwd);
-
+        Task LogoutAsync(int idUsers);
     }
 
     public class AuthService : IAuthService
@@ -138,6 +138,11 @@ namespace Bank_Slip_Scanner_App.Services
         public Task<bool> LoginAsync(int idUsers)
         {
             throw new NotImplementedException();
+        }
+
+        Task IAuthService.LogoutAsync(int idUsers)
+        {
+            return LogoutAsync(idUsers);
         }
     }
 }
