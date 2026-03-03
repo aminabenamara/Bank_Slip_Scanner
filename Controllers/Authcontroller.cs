@@ -13,15 +13,55 @@ namespace Bank_Slip_Scanner_App.Controllers
         [Route("api/[controller]")]
         public class Authcontroller : ControllerBase
         {
-            private readonly IAuthService auth;
-        private IAuthService _auth;
+            private readonly IAuthService _auth;
+        private readonly ILogger<Authcontroller> _logger;
 
-        public Authcontroller(IAuthService auth)
+        public Authcontroller(IAuthService auth, ILogger<Authcontroller> logger)
             {
             _auth = auth;
+            _logger = logger;
             }
+        [HttpPost("register")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Register attempt: {Email}", request.Email);
 
-            [HttpPost("login")]
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new RegisterResponse
+                    {
+                        Success = false,
+                        Message = "Données invalides"
+                    });
+                }
+
+                var result = await _auth.RegisterAsync(
+                    request.NomComplet,
+                    request.Email,
+                    request.Password
+                );
+
+                if (!result.Success)
+                {
+                    return BadRequest(result);
+                }
+
+                return Ok(result);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogError(ex, "Register error: {Email}", request?.Email);
+                return StatusCode(500, new RegisterResponse
+                {
+                    Success = false,
+                    Message = "erreur interne serveur."
+                });
+            }
+        }
+        [HttpPost("login")]
             [AllowAnonymous]
             public async Task<IActionResult> Login([FromBody] LoginRequest req)
             {
@@ -32,7 +72,7 @@ namespace Bank_Slip_Scanner_App.Controllers
                 var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 var ua = HttpContext.Request.Headers["User-agent"].ToString();
 
-                var result = await _auth.LoginAsync(req.Email, req.Password, req.KeepSignedIn, ip, ua);
+                var result = await _auth.LoginAsync(req.Email, req.Password, req.KeepSignedIn, ip,  ua);
             if (result.Success)
             {
                 return Ok(result);

@@ -4,67 +4,118 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Bank_Slip_Scanner_App.Data;
 using Bank_Slip_Scanner_App.Services;
-using static Bank_Slip_Scanner_App.Services.IJwtTokenService;
-
-
 
 var builder = WebApplication.CreateBuilder(args);
-        // base de données sql
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(
+// ═══════════════════════════════════════════════════════════
+//  1. DATABASE
+// ═══════════════════════════════════════════════════════════
+                    (Microsoft.EntityFrameworkCore.ServerVersion)builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure()
+    ));
 
-                    builder.Configuration.GetConnectionString("DefaultConnection"))
+// ═══════════════════════════════════════════════════════════
+//  2. SERVICES - SPRINT 1 + SPRINT 2
+// ═══════════════════════════════════════════════════════════
 
-              );
-        // services 
-        builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
-        builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-        builder.Services.AddScoped<IAuthService, AuthService>();
-        //JWT Authentification
-        var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"];
+// Sprint 1 - Authentication
+builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
-        builder.Services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(Options =>
-            {
-                Options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSettings["Issuer"],
-                    ValidAudience = jwtSettings["Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!)),
-                    ClockSkew = TimeSpan.Zero
-                };
-            });
-        builder.Services.AddAuthorization();
-        // CORS -> Angular sur localhost:4200
-        builder.Services.AddCors(options =>
-         options.AddPolicy("AllowAngular", policy =>
-          policy.WithOrigins("http://localhost:4200")
-          .AllowAnyMethod()
-          .AllowAnyHeader()));
-        // controlles + swagger
-        builder.Services.AddControllers();
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
+// Sprint 2 - PDF Processing
+//builder.Services.AddScoped<IPdfService, PdfService>();
+//builder.Services.AddScoped<IParsingService, ParsingService>();
 
-        
+// ═══════════════════════════════════════════════════════════
+//  3. JWT AUTHENTICATION
+// ═══════════════════════════════════════════════════════════
 
-        // build
-        var app = builder.Build();
-        if (app.Environment.IsDevelopment())
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"];
+
+if (string.IsNullOrEmpty(secretKey))
+{
+    throw new InvalidOperationException("JWT SecretKey is not configured in appsettings.json");
+}
+
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            app.UseSwagger();
-            app.UseSwaggerUI();
-        }
-        app.UseCors("AllowAngular");
-        app.UseAuthentication();
-        app.UseAuthorization();
-        app.MapControllers();
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
-        app.Run();
-   
+builder.Services.AddAuthorization();
+
+// ═══════════════════════════════════════════════════════════
+//  4. CORS
+// ═══════════════════════════════════════════════════════════
+
+builder.Services.AddCors(options =>
+    options.AddPolicy("AllowAngular", policy =>
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials()));
+
+// ═══════════════════════════════════════════════════════════
+//  5. CONTROLLERS + SWAGGER
+// ═══════════════════════════════════════════════════════════
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Bank Slip Scanner API",
+        Version = "v1"
+    });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  BUILD
+// ═══════════════════════════════════════════════════════════
+        builder.Services.AddEndpointsApiExplorer();
+var app = builder.Build();
+
+// ═══════════════════════════════════════════════════════════
+//  MIDDLEWARE
+// ═══════════════════════════════════════════════════════════
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    app.UseDeveloperExceptionPage();
+}
+
+app.UseStaticFiles();
+
+// IMPORTANT: L'ordre est critique!
+app.UseCors("AllowAngular");      // 1. CORS d'abord
+app.UseAuthentication();          // 2. Authentication
+app.UseAuthorization();           // 3. Authorization
+app.MapControllers();             // 4. Controllers
+        app.UseAuthorization();
+app.Run();        app.Run();
+    }
+}

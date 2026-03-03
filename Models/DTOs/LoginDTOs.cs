@@ -1,7 +1,29 @@
-﻿namespace Bank_Slip_Scanner_App.Models.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Bank_Slip_Scanner_App.Models.DTOs
 
    {
-        public class LoginRequest
+    public class RegisterRequest
+    {
+        [Required(ErrorMessage ="Le nom complet est requis")]
+        [MinLength(3, ErrorMessage ="Le nom doit contenir au mois 3 caractéres")]
+        public string NomComplet { get; set; }
+        [Required(ErrorMessage = "L'email est requis ")]
+        [EmailAddress(ErrorMessage ="Email invalide")]
+        public string Email { get; set; }
+        [Required(ErrorMessage ="le mot de passe est requis")]
+        [MinLength(8, ErrorMessage ="le mot de passe doit contenir au moins 8 cararctere")]
+        public string Password { get; set; }
+        public string ConfirmPassword { get; set; }
+    }
+
+    public class RegisterResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public int UserId { get; set; }
+    }
+    public class LoginRequest
         {
             public string Email { get; set; }
             public string Password { get; set; }

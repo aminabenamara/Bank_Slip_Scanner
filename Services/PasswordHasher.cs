@@ -7,6 +7,7 @@ namespace Bank_Slip_Scanner_App.Services
     {
         (string hash, string salt) HashPassword(string password);
         bool verify(string oldPassword, string motDePasseHash);
+        bool Verify(string password, object motDePasseHash);
         bool VerifyPassword(string password, string hash);
     }
     public class PasswordHasher : IPasswordHasher
@@ -27,6 +28,11 @@ namespace Bank_Slip_Scanner_App.Services
             }
 
         public bool verify(string oldPassword, string motDePasseHash)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Verify(string password, object motDePasseHash)
         {
             throw new NotImplementedException();
         }
