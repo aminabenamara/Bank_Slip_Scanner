@@ -1,92 +1,210 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Bank_Slip_Scanner_App.Data;
 using Bank_Slip_Scanner_App.Models;
 using Bank_Slip_Scanner_App.Models.DTOs;
-using Microsoft.Extensions.Logging;
 
 namespace Bank_Slip_Scanner_App.Services
 {
     public interface IAuthService
     {
-        Task<LoginRequest> LoginAsync(string email, string password, bool keepSignedIn, string ip, string ua);
-        Task<bool> LoginAsync(int idUsers);
-        Task<bool> ChangePasswordAsync(int idUsers, string oldPwd, string newPwd);
-        Task LogoutAsync(int idUsers);
+        Task<RegisterResponse> RegisterAsync(string nomComplet, string email, string password);
+        Task<LoginResponse> LoginAsync(string email, string password, bool keepSignedIn, string ip, string userAgent);
+        Task<bool> LogoutAsync(int userId);
+        Task<bool> ChangePasswordAsync(int userId, string oldPassword, string newPassword);
     }
 
     public class AuthService : IAuthService
     {
-        private readonly ApplicationDbContext _db;
-        private readonly IPasswordHasher _hasher;
-        private readonly IJwtTokenService _jwt;
-        private readonly IJwtTokenService jwt;
-        private readonly ILogger<AuthService> _log;
-    
+        private readonly ApplicationDbContext _context;
+        private readonly IPasswordHasher _passwordHasher;
+        private readonly IJwtTokenService _jwtTokenService;
+        private readonly ILogger<AuthService> _logger;
 
-    public AuthService(ApplicationDbContext db, IPasswordHasher hasher, IJwtTokenService jwt, ILogger<AuthService> log)
+        public AuthService(
+            ApplicationDbContext context,
+            IPasswordHasher passwordHasher,
+            IJwtTokenService jwtTokenService,
+            ILogger<AuthService> logger)
         {
-            _db = db;
-            _hasher = hasher;
-            _jwt = jwt;
-            _log = log;
-
+            _context = context;
+            _passwordHasher = passwordHasher;
+            _jwtTokenService = jwtTokenService;
+            _logger = logger;
         }
-        public async Task<LoginResponse> LoginAsync(
-            string email, string passowrd, bool keepSignedIn, string ip, string ua)
+
+        
+        //  REGISTER
+       
+
+        public async Task<RegisterResponse> RegisterAsync(string NomComplet, string email, string password)
         {
             try
             {
-                var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email.Trim().ToLower());
-                if (user == null)
-                    return Fail("invalid email or password"); // sécurite : ne pas dire " Email introvable"
-                // compte actif?
-                if (!user.Actif)
-                    return Fail("Account disabled.Contact administrator.");
-                // compte verrouillé?
-                if (user.CompteVerrouille)
-                    return Fail("Account locked after 5 attemps. Contact administrator.");
-                // verifier mot de passe (BCrypt)
-                if (!_hasher.VerifyPassword(passowrd, user.MotDePasseHash))
+                email = email.Trim().ToLower();
+
+                // Vérifier si email existe déjà
+                var existingUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
+                if (existingUser != null)
                 {
-                   user.TentativesConnexion++;
-                    //verrouiller aprés 5 Tentatives
-                    if (user.TentativesConnexion >=5)
+                    _logger.LogWarning("Tentative inscription avec email existant: {Email}", email);
+                    return new RegisterResponse
                     {
-                   
+                        Success = false,
+                        Message = "Cet email est déjà utilisé"
+                    };
+                }
+
+                // Séparer nom et prénom
+                var parts = NomComplet.Trim().Split(' ', 2);
+                var prenom = parts.Length > 0 ? parts[0] : NomComplet;
+                var nom = parts.Length > 1 ? parts[1] : "";
+
+                // Hash password
+                var (hash, salt) = _passwordHasher.HashPassword(password);
+
+                // Créer utilisateur
+                var user = new Users
+                {
+                    Email = email,
+                    MotDePasseHash = hash,
+                    Salt = salt,
+                    Prenom = prenom,
+                    Nom = nom,
+                    NomComplet = NomComplet,
+                    Actif = true,
+                    EmailVerifie = false,
+                    DateCreation = DateTime.Now,
+                    DateModification = DateTime.Now
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Nouveau compte créé: {Email} (ID: {UserId})", email, user.IdUsers);
+
+                return new RegisterResponse
+                {
+                    Success = true,
+                    Message = "Compte créé avec succès",
+                    UserId = user.IdUsers
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de l'inscription: {Email}", email);
+                return new RegisterResponse
+                {
+                    Success = false,
+                    Message = "Erreur serveur. Réessayez plus tard."
+                };
+            }
+        }
+
+        
+        //  LOGIN
+
+        public async Task<LoginResponse> LoginAsync(string email, string password, bool keepSignedIn, string ip, string userAgent)
+        {
+            try
+            {
+                email = email.Trim().ToLower();
+
+                // Trouver utilisateur
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
+                if (user == null)
+                {
+                    _logger.LogWarning("Tentative login email inexistant: {Email}", email);
+                    return new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Email ou mot de passe incorrect"
+                    };
+                }
+
+                // Vérifier compte actif
+                if (!user.Actif)
+                {
+                    return new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Compte désactivé. Contactez l'administrateur."
+                    };
+                }
+
+                // Vérifier compte verrouillé
+                if (user.CompteVerrouille)
+                {
+                    return new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Compte verrouillé après plusieurs tentatives échouées."
+                    };
+                }
+
+                // Vérifier mot de passe
+                if (!_passwordHasher.Verify(password, user.MotDePasseHash))
+                {
+                    user.TentativesConnexion++;
+
+                    if (user.TentativesConnexion >= 5)
+                    {
                         user.CompteVerrouille = true;
                         user.DateVerrouillage = DateTime.Now;
-                        _log.LogWarning("Compte verrouillé: {Email}", email);
-                        await _db.SaveChangesAsync();
-                        return Fail("Account has been locked");
+                        _logger.LogWarning("Compte verrouillé: {Email}", email);
                     }
-                    await _db.SaveChangesAsync();
-                    return Fail("Invalid email or password");
+
+                    await _context.SaveChangesAsync();
+
+                    return new LoginResponse
+                    {
+                        Success = false,
+                        Message = "Email ou mot de passe incorrect"
+                    };
                 }
-                // Rest tentatives + maj derniére connexion 
-                user.TentativesConnexion = 0;
+
+                // Reset tentatives + MAJ dernière connexion
+                user.TentativesConnexionEchouees = 0;
                 user.DerniereConnexion = DateTime.Now;
-                //Rôles (par défaut user si table vide)
+
+                // Générer tokens
                 var roles = new[] { "USER" };
-                // générer JWT + Refresh Token
-                var accessToken = _jwt.GenerateAccessToken(user.IdUsers, user.Email, user.NomComplet, roles);
-                var refreshToken = _jwt.GenerateRefreshToken();
-                // créer session en DB
-                _db.Sessions.Add(new Session
+                var accessToken = _jwtTokenService.GenerateAccessToken(
+                    user.IdUsers,
+                    user.Email,
+                    user.NomComplet,
+                    roles
+                );
+                var refreshToken = _jwtTokenService.GenerateRefreshToken();
+
+                // Créer session
+                var session = new Session
                 {
                     IdUsers = user.IdUsers,
                     TokenSession = accessToken,
                     RefreshToken = refreshToken,
                     IpAddress = ip,
-                    UserAgent = ua,
+                    UserAgent = userAgent,
                     DateExpiration = DateTime.Now.AddDays(keepSignedIn ? 30 : 1),
                     Actif = true
-                });
-                await _db.SaveChangesAsync();
-                _log.LogInformation("Login OK: {Email} | IP: {IP}", email, ip);
+                };
+
+                _context.Sessions.Add(session);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Login réussi: {Email} | IP: {IP}", email, ip);
+
                 return new LoginResponse
                 {
                     Success = true,
-                    Message = "Login successful",
+                    Message = "Connexion réussie",
                     AccessToken = accessToken,
                     RefreshToken = refreshToken,
                     User = new UserInfoDto
@@ -94,55 +212,80 @@ namespace Bank_Slip_Scanner_App.Services
                         Id = user.IdUsers,
                         Email = user.Email,
                         NomComplet = user.NomComplet,
-                        Roles = roles,
+                        Roles = roles
                     }
                 };
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
-                _log.LogError(ex, "Erreur login: {Email}", email);
-                return Fail("Server Error . try again.");
-
-
+                _logger.LogError(ex, "Erreur login: {Email}", email);
+                return new LoginResponse
+                {
+                    Success = false,
+                    Message = "Erreur serveur."
+                };
             }
         }
-        //LOGOUT
-        public async Task<bool> LogoutAsync(int idUsers)
-        {
-            var sessions = await _db.Sessions
-                .Where(s => s.IdUsers == idUsers && s.Actif)
-                .ToListAsync();
-            sessions.ForEach(s => s.Actif = false);
-            await _db.SaveChangesAsync();
-            return true;
 
-        }
-        // change Password
-        public async Task<bool> ChangePasswordAsync(int idUsers, string OldPassword, string NewPassword) {
-            var user = await _db.Users.FindAsync(idUsers);
-            if (user == null || !_hasher.verify(OldPassword, user.MotDePasseHash))
+   
+        //  LOGOUT
+        
+        public async Task<bool> LogoutAsync(int userId)
+        {
+            try
+            {
+                var sessions = await _context.Sessions
+                    .Where(s => s.IdUsers == userId && s.Actif)
+                    .ToListAsync();
+
+                foreach (var session in sessions)
+                {
+                    session.Actif = false;
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Logout réussi: UserID={UserId}", userId);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur logout: UserID={UserId}", userId);
                 return false;
-            var (hash, salt) = _hasher.HashPassword(NewPassword);
-            user.MotDePasseHash = hash;
-            user.Salt = salt;
-
-            await _db.SaveChangesAsync();
-            return true;
-        }
-        private static LoginResponse Fail(String msg) => new() { Success = false, Message = msg };
-
-        Task<LoginRequest> IAuthService.LoginAsync(string email, string password, bool keepSignedIn, string ip, string ua)
-        {
-            throw new NotImplementedException();
+            }
         }
 
-        public Task<bool> LoginAsync(int idUsers)
+        
+        //  CHANGE PASSWORD
+       
+        public async Task<bool> ChangePasswordAsync(int userId, string oldPassword, string newPassword)
         {
-            throw new NotImplementedException();
-        }
+            try
+            {
+                var user = await _context.Users.FindAsync(userId);
 
-        Task IAuthService.LogoutAsync(int idUsers)
-        {
-            return LogoutAsync(idUsers);
+                if (user == null || !_passwordHasher.Verify(oldPassword, user.MotDePasseHash))
+                {
+                    return false;
+                }
+
+                var (hash, salt) = _passwordHasher.HashPassword(newPassword);
+                user.MotDePasseHash = hash;
+                user.Salt = salt;
+                user.DateModification = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Mot de passe changé: UserID={UserId}", userId);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur changement mot de passe: UserID={UserId}", userId);
+                return false;
+            }
         }
     }
 }

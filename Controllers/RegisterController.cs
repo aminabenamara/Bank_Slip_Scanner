@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Bank_Slip_Scanner_App.Data;
 using Bank_Slip_Scanner_App.Models;
 using Bank_Slip_Scanner_App.Services;
-using Microsoft.AspNetCore.Identity.Data;
+using Bank_Slip_Scanner_App.Models.DTOs;
 
 namespace Bank_Slip_Scanner_App.Controllers
 {
@@ -72,7 +72,7 @@ namespace Bank_Slip_Scanner_App.Controllers
                 {
                     success = true,
                     message = "Compte créé avec succès!",
-                    idUsers = user.IdUsers
+                    userId = user.IdUsers 
                 });
             }
             catch (Exception ex)
@@ -82,11 +82,5 @@ namespace Bank_Slip_Scanner_App.Controllers
             }
         }
     }
-    public class RegisterRequest
-    {
-        public string NomComplet { get; set; }
-        public string Email { get; set; }
-        public string Password { get; set; }
-        public string ConfirmPassword { get; set; }
-    }
+  
 }
